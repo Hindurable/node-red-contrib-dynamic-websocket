@@ -1,0 +1,80 @@
+<script type="text/javascript">
+    RED.nodes.registerType('dynamic-websocket',{
+        category: 'network',
+        color: '#a6bbcf',
+        defaults: {
+            name: {value:""},
+            url: {value:""}
+        },
+        inputs:1,
+        outputs:3,
+        icon: "bridge.svg",
+        label: function() {
+            return this.name||"Dynamic WebSocket";
+        },
+        paletteLabel: "Dynamic WebSocket",
+        oneditprepare: function() {
+            var node = this;
+            $("#node-input-url").on("change", function() {
+                node.url = $(this).val();
+            });
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="dynamic-websocket">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-url"><i class="fa fa-globe"></i> Default URL</label>
+        <input type="text" id="node-input-url" placeholder="ws://example.com/socket">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="dynamic-websocket">
+    <p>A node that dynamically connects to a WebSocket URL, can send and receive messages, and reports connection state changes.</p>
+    <h3>Input</h3>
+    <dl class="message-properties">
+        <dt>url <span class="property-type">string</span></dt>
+        <dd>The WebSocket URL to connect to. If provided, it will override the default URL and be stored for future use.</dd>
+        <dt>close <span class="property-type">boolean</span></dt>
+        <dd>If set to true, it will close the current WebSocket connection and clear the stored URL.</dd>
+        <dt>message <span class="property-type">object | string</span></dt>
+        <dd>The message to be sent through the WebSocket. This will be stringified before sending.</dd>
+    </dl>
+    <h3>Outputs</h3>
+    <dl class="message-properties">
+        <dt>1. Received Output (top)</dt>
+        <dd>
+            <dl class="message-properties">
+                <dt>payload <span class="property-type">object | string</span></dt>
+                <dd>The data received from the WebSocket connection. If the received data is valid JSON, it will be parsed into an object. Otherwise, it will be output as a string.</dd>
+            </dl>
+        </dd>
+        <dt>2. State Output (middle)</dt>
+        <dd>
+            <dl class="message-properties">
+                <dt>state <span class="property-type">string</span></dt>
+                <dd>The current state of the WebSocket connection. Can be "disconnected" or "error".</dd>
+                <dt>error <span class="property-type">string</span></dt>
+                <dd>If the state is "error", this will contain the error message.</dd>
+            </dl>
+        </dd>
+        <dt>3. Connected Output (bottom)</dt>
+        <dd>
+            <dl class="message-properties">
+                <dt>state <span class="property-type">string</span></dt>
+                <dd>Outputs "Connected" when a connection is established.</dd>
+            </dl>
+        </dd>
+    </dl>
+    <h3>Details</h3>
+    <p>This node will remember the last URL it connected to, even after a Node-RED restart. To change the URL, send a new message with the desired URL in <code>msg.url</code>. To close the connection and clear the stored URL, send a message with <code>msg.close = true</code>.</p>
+    <p>To send a message through the WebSocket, include <code>msg.message</code> in the input message.</p>
+    <p>When connected, the node status will display the current WebSocket URL.</p>
+    <p>The node attempts to parse incoming messages as JSON. If successful, the output will be a JSON object. If parsing fails, the raw message will be output as a string.</p>
+    <p>The second output will emit a message whenever the connection state changes (except when closed by <code>msg.close</code>), allowing you to monitor and react to connection issues.</p>
+    <p>The third output will emit a "Connected" message when a connection is established, allowing you to trigger actions upon successful connection.</p>
+</script>

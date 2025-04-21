@@ -1,0 +1,28 @@
+{
+  "name": "node-red-contrib-dynamic-websocket",
+  "version": "1.0.2",
+  "description": "A node that dynamically connects to a WebSocket URL, can send and receive messages, and reports connection state changes.",
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "node-red": {
+    "version": ">=3.0.0",
+    "nodes": {
+      "dynamic-websocket": "dynamic-websocket.js"
+    }
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hindurable/node-red-contrib-dynamic-websocket.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Hindurable/node-red-contrib-dynamic-websocket/issues"
+  },
+  "homepage": "https://github.com/Hindurable/node-red-contrib-dynamic-websocket",
+  "author": "Hindurable",
+  "license": "MIT"
+}
