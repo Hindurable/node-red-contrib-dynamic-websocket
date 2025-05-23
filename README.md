@@ -9,6 +9,7 @@ A flexible Node-RED node that enables dynamic WebSocket connections at runtime. 
 - **Persistent Connections**: Remembers the last connected URL even after Node-RED restarts
 - **JSON Parsing**: Automatically parses incoming WebSocket messages as JSON when possible
 - **Connection Management**: Easily close connections and clear stored URLs
+- **Self-Signed Certificate Support**: Option to allow connections to WebSockets with self-signed or expired certificates
 
 ## Installation
 
@@ -35,6 +36,7 @@ Send messages with the following properties to control the node:
 - **msg.url**: Set a new WebSocket URL to connect to (overrides the default URL)
 - **msg.close**: Set to `true` to close the current connection and clear the stored URL
 - **msg.message**: The message to send through the WebSocket (will be stringified before sending)
+- **msg.allowSelfSigned**: Set to `true` or `false` to override the node's configuration for accepting self-signed certificates
 
 ### Outputs
 
@@ -52,6 +54,7 @@ Send messages with the following properties to control the node:
 
 - **Name**: Node name displayed in the flow
 - **Default URL**: Initial WebSocket URL to connect to (can be overridden at runtime)
+- **Allow Self-Signed Certificates**: When enabled, allows connections to WebSockets with self-signed or expired certificates
 
 ## Examples
 
@@ -99,6 +102,9 @@ MIT
 Hindurable
 
 ## Changelog
+
+### 1.0.4
+- Added option to allow connections to WebSockets with self-signed or expired certificates
 
 ### 1.0.2
 - Initial public release

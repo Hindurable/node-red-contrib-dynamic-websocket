@@ -7,6 +7,7 @@ module.exports = function(RED) {
 
         // Load the stored URL from persistent storage
         node.url = node.context().get('storedUrl') || config.url || "";
+        node.allowSelfSigned = config.allowSelfSigned || false;
 
         function connectWebSocket(url) {
             if (ws) {
@@ -22,7 +23,12 @@ module.exports = function(RED) {
             // Store the URL in persistent storage
             node.context().set('storedUrl', url);
 
-            ws = new WebSocket(url);
+            // Create WebSocket with options for self-signed certificates if enabled
+            const wsOptions = {};
+            if (node.allowSelfSigned) {
+                wsOptions.rejectUnauthorized = false;
+            }
+            ws = new WebSocket(url, wsOptions);
 
             ws.on('open', function() {
                 node.status({fill:"green", shape:"dot", text:url});
@@ -61,6 +67,10 @@ module.exports = function(RED) {
 
         node.on('input', function(msg, send, done) {
             if (msg.url) {
+                // Allow dynamic override of self-signed certificate option
+                if (msg.allowSelfSigned !== undefined) {
+                    node.allowSelfSigned = msg.allowSelfSigned;
+                }
                 connectWebSocket(msg.url);
             } else if (msg.close === true) {
                 if (ws) {
@@ -87,5 +97,11 @@ module.exports = function(RED) {
         });
     }
 
-    RED.nodes.registerType("dynamic-websocket", DynamicWebSocketNode);
+    RED.nodes.registerType("dynamic-websocket", DynamicWebSocketNode, {
+        defaults: {
+            name: {value: ""},
+            url: {value: ""},
+            allowSelfSigned: {value: false}
+        }
+    });
 }

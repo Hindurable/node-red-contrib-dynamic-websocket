@@ -4,7 +4,8 @@
         color: '#a6bbcf',
         defaults: {
             name: {value:""},
-            url: {value:""}
+            url: {value:""},
+            allowSelfSigned: {value: false}
         },
         inputs:1,
         outputs:3,
@@ -31,6 +32,11 @@
         <label for="node-input-url"><i class="fa fa-globe"></i> Default URL</label>
         <input type="text" id="node-input-url" placeholder="ws://example.com/socket">
     </div>
+    <div class="form-row">
+        <label for="node-input-allowSelfSigned"><i class="fa fa-lock"></i> Allow Self-Signed Certificates</label>
+        <input type="checkbox" id="node-input-allowSelfSigned" style="display: inline-block; width: auto; vertical-align: top;">
+        <span style="margin-left: 5px;">Enable this for connections with self-signed or expired certificates</span>
+    </div>
 </script>
 
 <script type="text/html" data-help-name="dynamic-websocket">
@@ -43,6 +49,8 @@
         <dd>If set to true, it will close the current WebSocket connection and clear the stored URL.</dd>
         <dt>message <span class="property-type">object | string</span></dt>
         <dd>The message to be sent through the WebSocket. This will be stringified before sending.</dd>
+        <dt>allowSelfSigned <span class="property-type">boolean</span></dt>
+        <dd>If set, overrides the node's configuration for accepting self-signed certificates for this connection.</dd>
     </dl>
     <h3>Outputs</h3>
     <dl class="message-properties">
