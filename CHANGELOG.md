@@ -5,6 +5,17 @@ All notable changes to the node-red-contrib-dynamic-websocket project will be do
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] - 2025-05-25
+
+### Added
+- Message transformation features:
+  - Template-based message transformation with placeholder substitution
+  - Support for different message formats (JSON, MQTT, Custom)
+  - Binary data transmission support
+  - Message validation against templates
+  - Dynamic control of transformation settings via messages
+- Added example templates for common message formats
+
 ## [1.0.6] - 2025-05-25
 
 ### Added

@@ -16,7 +16,12 @@
             token: {value: ""},
             tokenLocation: {value: "header"},
             tokenKey: {value: "Authorization"},
-            headers: {value: ""}
+            headers: {value: ""},
+            transformMessages: {value: false},
+            messageFormat: {value: "json"},
+            binarySupport: {value: false},
+            validateMessages: {value: false},
+            messageTemplate: {value: ""}
         },
         credentials: {
             password: {type: "password"},
@@ -87,6 +92,58 @@
                     // If it's not valid JSON, leave as is
                 }
             }
+            
+            // Initialize the message template textarea with formatted JSON
+            if (node.messageTemplate) {
+                try {
+                    // If it's already an object, stringify it
+                    if (typeof node.messageTemplate === 'object') {
+                        $("#node-input-messageTemplate").val(JSON.stringify(node.messageTemplate, null, 2));
+                    } else {
+                        // Try to parse and format if it's a string
+                        var templateObj = JSON.parse(node.messageTemplate);
+                        $("#node-input-messageTemplate").val(JSON.stringify(templateObj, null, 2));
+                    }
+                } catch(e) {
+                    // If it's not valid JSON, leave as is
+                }
+            }
+            
+            // Show/hide message transformation settings based on checkbox
+            function toggleTransformOptions() {
+                if ($("#node-input-transformMessages").is(":checked")) {
+                    $("#transform-settings").show();
+                } else {
+                    $("#transform-settings").hide();
+                }
+            }
+            
+            $("#node-input-transformMessages").on("change", toggleTransformOptions);
+            toggleTransformOptions();
+            
+            // Add template examples
+            $("#add-template-example").on("click", function() {
+                var format = $("#node-input-messageFormat").val();
+                var template = "";
+                
+                if (format === "json") {
+                    template = {
+                        "type": "message",
+                        "id": "$id",
+                        "content": "$content",
+                        "timestamp": new Date().toISOString()
+                    };
+                } else if (format === "mqtt") {
+                    template = {
+                        "topic": "$topic",
+                        "payload": "$payload",
+                        "qos": 0,
+                        "retain": false
+                    };
+                }
+                
+                $("#node-input-messageTemplate").val(JSON.stringify(template, null, 2));
+            });
         }
     });
 </script>
@@ -182,6 +239,48 @@
             <small>Enter custom headers as JSON object. Example: {"X-Custom-Header": "value"}</small>
         </div>
     </div>
+    
+    <div class="form-section-header">
+        <i class="fa fa-exchange"></i> Message Transformation
+    </div>
+    
+    <div class="form-row">
+        <label for="node-input-transformMessages"><i class="fa fa-magic"></i> Transform Messages</label>
+        <input type="checkbox" id="node-input-transformMessages" style="display: inline-block; width: auto; vertical-align: top;">
+        <span style="margin-left: 5px;">Apply template and validation to outgoing messages</span>
+    </div>
+    
+    <div id="transform-settings">
+        <div class="form-row">
+            <label for="node-input-messageFormat"><i class="fa fa-code"></i> Message Format</label>
+            <select id="node-input-messageFormat" style="width: 70%;">
+                <option value="json">JSON</option>
+                <option value="mqtt">MQTT</option>
+                <option value="custom">Custom</option>
+            </select>
+        </div>
+        
+        <div class="form-row">
+            <label for="node-input-binarySupport"><i class="fa fa-file-o"></i> Binary Support</label>
+            <input type="checkbox" id="node-input-binarySupport" style="display: inline-block; width: auto; vertical-align: top;">
+            <span style="margin-left: 5px;">Enable support for binary data transmission</span>
+        </div>
+        
+        <div class="form-row">
+            <label for="node-input-validateMessages"><i class="fa fa-check-circle"></i> Validate Messages</label>
+            <input type="checkbox" id="node-input-validateMessages" style="display: inline-block; width: auto; vertical-align: top;">
+            <span style="margin-left: 5px;">Validate messages against template before sending</span>
+        </div>
+        
+        <div class="form-row">
+            <label for="node-input-messageTemplate"><i class="fa fa-file-text-o"></i> Message Template</label>
+            <textarea id="node-input-messageTemplate" rows="6" style="width: 70%; font-family: monospace;" placeholder='{"type": "message", "content": "$content"}'></textarea>
+            <div style="max-width: 460px; margin-top: 5px; margin-left: 105px; color: #999;">
+                <small>Enter message template as JSON object. Use $placeholder for dynamic values.</small>
+                <button id="add-template-example" type="button" style="margin-top: 5px;">Add Example Template</button>
+            </div>
+        </div>
+    </div>
 </script>
 
 <script type="text/html" data-help-name="dynamic-websocket">
@@ -220,6 +319,20 @@
         <dd>Key name for the token (header name or URL parameter). Overrides the node's configuration.</dd>
         <dt>headers <span class="property-type">object | string</span></dt>
         <dd>Custom headers to include in the WebSocket connection. Can be an object or a JSON string. Overrides the node's configuration.</dd>
+        <dt>transformMessages <span class="property-type">boolean</span></dt>
+        <dd>Enable or disable message transformation. Overrides the node's configuration.</dd>
+        <dt>messageFormat <span class="property-type">string</span></dt>
+        <dd>Set the message format ("json", "mqtt", "custom"). Overrides the node's configuration.</dd>
+        <dt>binarySupport <span class="property-type">boolean</span></dt>
+        <dd>Enable or disable binary data support. Overrides the node's configuration.</dd>
+        <dt>validateMessages <span class="property-type">boolean</span></dt>
+        <dd>Enable or disable message validation. Overrides the node's configuration.</dd>
+        <dt>messageTemplate <span class="property-type">object | string</span></dt>
+        <dd>Message template to apply. Can be an object or a JSON string. Overrides the node's configuration.</dd>
+        <dt>binary <span class="property-type">boolean</span></dt>
+        <dd>Set to true to send binary data. The message must be a Buffer.</dd>
+        <dt>skipTransform <span class="property-type">boolean</span></dt>
+        <dd>Set to true to skip transformation for this message only.</dd>
     </dl>
     <h3>Outputs</h3>
     <dl class="message-properties">

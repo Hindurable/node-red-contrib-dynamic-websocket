@@ -32,6 +32,20 @@ module.exports = function(RED) {
             node.warn("Invalid headers JSON: " + e.message);
             node.headers = {};
         }
+        
+        // Message transformation settings
+        node.transformMessages = config.transformMessages || false;
+        node.messageFormat = config.messageFormat || 'json';
+        node.binarySupport = config.binarySupport || false;
+        node.validateMessages = config.validateMessages || false;
+        
+        // Message template - parse from JSON if provided
+        try {
+            node.messageTemplate = config.messageTemplate ? JSON.parse(config.messageTemplate) : {};
+        } catch (e) {
+            node.warn("Invalid message template JSON: " + e.message);
+            node.messageTemplate = {};
+        }
 
         function calculateReconnectDelay() {
             // Calculate delay with exponential backoff if enabled
@@ -164,11 +178,23 @@ module.exports = function(RED) {
 
             ws.on('message', function(data) {
                 let payload;
-                try {
-                    payload = JSON.parse(data);
-                } catch (e) {
-                    payload = data;
+                
+                // Handle binary data if enabled
+                if (node.binarySupport && data instanceof Buffer) {
+                    payload = {
+                        binary: true,
+                        data: data,
+                        length: data.length
+                    };
+                } else {
+                    // Try to parse as JSON if not binary or binary not enabled
+                    try {
+                        payload = JSON.parse(data);
+                    } catch (e) {
+                        payload = data;
+                    }
                 }
+                
                 node.send([{payload: payload}, null, null]);
             });
         }
@@ -230,6 +256,31 @@ module.exports = function(RED) {
                     }
                 }
                 
+                // Allow dynamic override of message transformation settings
+                if (msg.transformMessages !== undefined) {
+                    node.transformMessages = msg.transformMessages;
+                }
+                if (msg.messageFormat !== undefined) {
+                    node.messageFormat = msg.messageFormat;
+                }
+                if (msg.binarySupport !== undefined) {
+                    node.binarySupport = msg.binarySupport;
+                }
+                if (msg.validateMessages !== undefined) {
+                    node.validateMessages = msg.validateMessages;
+                }
+                if (msg.messageTemplate !== undefined) {
+                    if (typeof msg.messageTemplate === 'object') {
+                        node.messageTemplate = msg.messageTemplate;
+                    } else if (typeof msg.messageTemplate === 'string') {
+                        try {
+                            node.messageTemplate = JSON.parse(msg.messageTemplate);
+                        } catch (e) {
+                            node.warn("Invalid message template JSON in message: " + e.message);
+                        }
+                    }
+                }
+                
                 // Reset reconnect attempts when connecting to a new URL
                 reconnectAttempts = 0;
                 connectWebSocket(msg.url);
@@ -255,7 +306,25 @@ module.exports = function(RED) {
                 node.status({fill:"yellow", shape:"ring", text:"closed"});
             } else if (msg.message) {
                 if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify(msg.message));
+                    // Handle message transformation if enabled
+                    if (node.transformMessages && !msg.skipTransform) {
+                        let transformedMessage = transformMessage(msg.message);
+                        if (transformedMessage !== null) {
+                            // Handle binary data if enabled
+                            if (node.binarySupport && msg.binary === true && Buffer.isBuffer(transformedMessage)) {
+                                ws.send(transformedMessage);
+                            } else {
+                                ws.send(JSON.stringify(transformedMessage));
+                            }
+                        }
+                    } else {
+                        // Handle binary data if enabled
+                        if (node.binarySupport && msg.binary === true && Buffer.isBuffer(msg.message)) {
+                            ws.send(msg.message);
+                        } else {
+                            ws.send(JSON.stringify(msg.message));
+                        }
+                    }
                 } else {
                     node.warn("WebSocket is not open. Cannot send message.");
                 }
@@ -277,6 +346,63 @@ module.exports = function(RED) {
         });
     }
 
+    // Function to transform messages based on selected format and template
+    function transformMessage(message) {
+        try {
+            // Skip transformation for null or undefined messages
+            if (message === null || message === undefined) {
+                return null;
+            }
+            
+            // Apply template if available
+            if (Object.keys(node.messageTemplate).length > 0) {
+                let result = JSON.parse(JSON.stringify(node.messageTemplate)); // Clone template
+                
+                // Simple placeholder replacement for string values
+                function replaceValues(obj, data) {
+                    for (let key in obj) {
+                        if (typeof obj[key] === 'string' && obj[key].startsWith('$')) {
+                            const placeholder = obj[key].substring(1); // Remove $ prefix
+                            if (data[placeholder] !== undefined) {
+                                obj[key] = data[placeholder];
+                            }
+                        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                            replaceValues(obj[key], data);
+                        }
+                    }
+                    return obj;
+                }
+                
+                result = replaceValues(result, message);
+                
+                // Validate message if validation is enabled
+                if (node.validateMessages) {
+                    // Implement validation logic based on message format
+                    // For now, just check if required fields are present
+                    let valid = true;
+                    for (let key in result) {
+                        if (result[key] === undefined || result[key] === null) {
+                            valid = false;
+                            node.warn("Message validation failed: Missing required field '" + key + "'");
+                            break;
+                        }
+                    }
+                    if (!valid) {
+                        return null;
+                    }
+                }
+                
+                return result;
+            } else {
+                // No template, just return the original message
+                return message;
+            }
+        } catch (e) {
+            node.warn("Message transformation failed: " + e.message);
+            return null;
+        }
+    }
+    
     RED.nodes.registerType("dynamic-websocket", DynamicWebSocketNode, {
         defaults: {
             name: {value: ""},
@@ -292,7 +418,12 @@ module.exports = function(RED) {
             token: {value: "", type: "password"},
             tokenLocation: {value: "header"},
             tokenKey: {value: "Authorization"},
-            headers: {value: ""}
+            headers: {value: ""},
+            transformMessages: {value: false},
+            messageFormat: {value: "json"},
+            binarySupport: {value: false},
+            validateMessages: {value: false},
+            messageTemplate: {value: ""}
         }
     });
 }

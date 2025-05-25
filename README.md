@@ -12,6 +12,7 @@ A flexible Node-RED node that enables dynamic WebSocket connections at runtime. 
 - **Self-Signed Certificate Support**: Option to allow connections to WebSockets with self-signed or expired certificates
 - **Advanced Reconnection Strategy**: Configurable auto-reconnect with exponential backoff
 - **Authentication Support**: Basic authentication, token-based authentication, and custom headers
+- **Message Transformation**: Template-based message transformation with validation and binary support
 
 ## Installation
 
@@ -51,11 +52,21 @@ Send messages with the following properties to control the node:
 - **msg.tokenLocation**: Set to `'header'` or `'url'` to specify where to place the token
 - **msg.tokenKey**: Set the key name for the token (header name or URL parameter)
 - **msg.headers**: Set custom headers as an object or JSON string
+- **msg.transformMessages**: Enable or disable message transformation
+- **msg.messageFormat**: Set the message format (`'json'`, `'mqtt'`, `'custom'`)
+- **msg.binarySupport**: Enable or disable binary data support
+- **msg.validateMessages**: Enable or disable message validation
+- **msg.messageTemplate**: Set the message template as an object or JSON string
+- **msg.binary**: Set to `true` to send binary data (message must be a Buffer)
+- **msg.skipTransform**: Set to `true` to skip transformation for this message only
 
 ### Outputs
 
 1. **Top Output**: Received WebSocket messages
    - **msg.payload**: Data received from the WebSocket (parsed as JSON if possible)
+   - **msg.payload.binary**: Set to `true` if the message is binary data (when binary support is enabled)
+   - **msg.payload.data**: Contains the binary data as a Buffer (when binary support is enabled)
+   - **msg.payload.length**: Size of the binary data in bytes (when binary support is enabled)
 
 2. **Middle Output**: Connection state changes
    - **msg.state**: Current connection state ("disconnected", "error", "reconnecting", or "reconnect_failed")
@@ -82,6 +93,11 @@ Send messages with the following properties to control the node:
 - **Token Location**: Where to place the token (Header or URL parameter)
 - **Token Key**: Name of the header or URL parameter for the token
 - **Custom Headers**: Additional HTTP headers to include in the connection request
+- **Transform Messages**: Enable template-based message transformation
+- **Message Format**: Format for message transformation (JSON, MQTT, Custom)
+- **Binary Support**: Enable support for binary data transmission
+- **Validate Messages**: Validate messages against template before sending
+- **Message Template**: Template for transforming messages with placeholders
 
 ## Examples
 
@@ -129,6 +145,14 @@ MIT
 Hindurable
 
 ## Changelog
+
+### 1.0.7
+- Added message transformation features:
+  - Template-based message transformation with placeholder substitution
+  - Support for different message formats (JSON, MQTT, Custom)
+  - Binary data transmission support
+  - Message validation against templates
+  - Dynamic control of transformation settings via messages
 
 ### 1.0.6
 - Added authentication support with multiple methods:
