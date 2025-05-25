@@ -10,6 +10,8 @@ A flexible Node-RED node that enables dynamic WebSocket connections at runtime. 
 - **JSON Parsing**: Automatically parses incoming WebSocket messages as JSON when possible
 - **Connection Management**: Easily close connections and clear stored URLs
 - **Self-Signed Certificate Support**: Option to allow connections to WebSockets with self-signed or expired certificates
+- **Advanced Reconnection Strategy**: Configurable auto-reconnect with exponential backoff
+- **Authentication Support**: Basic authentication, token-based authentication, and custom headers
 
 ## Installation
 
@@ -37,6 +39,18 @@ Send messages with the following properties to control the node:
 - **msg.close**: Set to `true` to close the current connection and clear the stored URL
 - **msg.message**: The message to send through the WebSocket (will be stringified before sending)
 - **msg.allowSelfSigned**: Set to `true` or `false` to override the node's configuration for accepting self-signed certificates
+- **msg.reconnect**: Set to `true` to force an immediate reconnection attempt using the current URL
+- **msg.autoReconnect**: Set to `true` or `false` to override the node's configuration for automatic reconnection
+- **msg.reconnectAttempts**: Set to a number to override the node's configuration for maximum reconnection attempts (0 = unlimited)
+- **msg.reconnectInterval**: Set to a number to override the node's configuration for reconnection interval in milliseconds
+- **msg.useExponentialBackoff**: Set to `true` or `false` to override the node's configuration for using exponential backoff
+- **msg.authType**: Set to `'none'`, `'basic'`, or `'token'` to override the authentication type
+- **msg.username**: Set the username for basic authentication
+- **msg.password**: Set the password for basic authentication
+- **msg.token**: Set the token for token-based authentication
+- **msg.tokenLocation**: Set to `'header'` or `'url'` to specify where to place the token
+- **msg.tokenKey**: Set the key name for the token (header name or URL parameter)
+- **msg.headers**: Set custom headers as an object or JSON string
 
 ### Outputs
 
@@ -44,8 +58,11 @@ Send messages with the following properties to control the node:
    - **msg.payload**: Data received from the WebSocket (parsed as JSON if possible)
 
 2. **Middle Output**: Connection state changes
-   - **msg.state**: Current connection state ("disconnected" or "error")
+   - **msg.state**: Current connection state ("disconnected", "error", "reconnecting", or "reconnect_failed")
    - **msg.error**: Error message (when state is "error")
+   - **msg.code**: WebSocket close code (when state is "disconnected")
+   - **msg.attempt**: Current reconnection attempt number (when state is "reconnecting")
+   - **msg.attempts**: Total reconnection attempts made (when state is "reconnect_failed")
 
 3. **Bottom Output**: Connection established notification
    - **msg.state**: "Connected" when a connection is successfully established
@@ -55,6 +72,16 @@ Send messages with the following properties to control the node:
 - **Name**: Node name displayed in the flow
 - **Default URL**: Initial WebSocket URL to connect to (can be overridden at runtime)
 - **Allow Self-Signed Certificates**: When enabled, allows connections to WebSockets with self-signed or expired certificates
+- **Auto Reconnect**: When enabled, automatically attempts to reconnect when disconnected
+- **Max Reconnect Attempts**: Maximum number of reconnection attempts (0 = unlimited)
+- **Reconnect Interval (ms)**: Base time in milliseconds between reconnection attempts
+- **Use Exponential Backoff**: When enabled, increases the delay between reconnection attempts
+- **Authentication**: Type of authentication to use (None, Basic, or Token)
+- **Username/Password**: Credentials for basic authentication
+- **Token**: Authentication token for token-based authentication
+- **Token Location**: Where to place the token (Header or URL parameter)
+- **Token Key**: Name of the header or URL parameter for the token
+- **Custom Headers**: Additional HTTP headers to include in the connection request
 
 ## Examples
 
@@ -81,9 +108,9 @@ Send messages with the following properties to control the node:
 ## Node Status Indicators
 
 - **Green dot**: Connected (shows the current URL)
-- **Yellow ring**: No URL set or connection closed
+- **Yellow ring**: No URL set, connection closed, or reconnecting (shows reconnection details)
 - **Red ring**: Disconnected
-- **Red dot**: Connection error
+- **Red dot**: Connection error or reconnection failed
 
 ## Technical Details
 
@@ -102,6 +129,19 @@ MIT
 Hindurable
 
 ## Changelog
+
+### 1.0.6
+- Added authentication support with multiple methods:
+  - Basic authentication (username/password)
+  - Token-based authentication (Bearer tokens or custom)
+  - Custom headers for advanced authentication scenarios
+- Added ability to place tokens in headers or URL parameters
+- Added dynamic control of authentication settings via messages
+
+### 1.0.5
+- Added advanced reconnection strategy with configurable parameters
+- Implemented exponential backoff for reconnection attempts
+- Added option to auto-reconnect on error or disconnection
 
 ### 1.0.4
 - Added option to allow connections to WebSockets with self-signed or expired certificates

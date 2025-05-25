@@ -5,7 +5,22 @@
         defaults: {
             name: {value:""},
             url: {value:""},
-            allowSelfSigned: {value: false}
+            allowSelfSigned: {value: false},
+            autoReconnect: {value: false},
+            reconnectAttempts: {value: 0},
+            reconnectInterval: {value: 5000},
+            useExponentialBackoff: {value: false},
+            authType: {value: "none"},
+            username: {value: ""},
+            password: {value: ""},
+            token: {value: ""},
+            tokenLocation: {value: "header"},
+            tokenKey: {value: "Authorization"},
+            headers: {value: ""}
+        },
+        credentials: {
+            password: {type: "password"},
+            token: {type: "password"}
         },
         inputs:1,
         outputs:3,
@@ -19,6 +34,59 @@
             $("#node-input-url").on("change", function() {
                 node.url = $(this).val();
             });
+            
+            // Show/hide reconnection settings based on autoReconnect checkbox
+            function toggleReconnectOptions() {
+                if ($("#node-input-autoReconnect").is(":checked")) {
+                    $("#reconnect-settings").show();
+                } else {
+                    $("#reconnect-settings").hide();
+                }
+            }
+            
+            $("#node-input-autoReconnect").on("change", toggleReconnectOptions);
+            toggleReconnectOptions();
+            
+            // Show/hide authentication settings based on authType dropdown
+            function toggleAuthOptions() {
+                var authType = $("#node-input-authType").val();
+                $("#basic-auth-settings").hide();
+                $("#token-auth-settings").hide();
+                
+                if (authType === "basic") {
+                    $("#basic-auth-settings").show();
+                } else if (authType === "token") {
+                    $("#token-auth-settings").show();
+                }
+            }
+            
+            $("#node-input-authType").on("change", toggleAuthOptions);
+            toggleAuthOptions();
+            
+            // Show/hide token location settings
+            function toggleTokenLocationOptions() {
+                var tokenLocation = $("#node-input-tokenLocation").val();
+                $("#token-key-settings").show();
+            }
+            
+            $("#node-input-tokenLocation").on("change", toggleTokenLocationOptions);
+            toggleTokenLocationOptions();
+            
+            // Initialize the custom headers textarea with formatted JSON
+            if (node.headers) {
+                try {
+                    // If it's already an object, stringify it
+                    if (typeof node.headers === 'object') {
+                        $("#node-input-headers").val(JSON.stringify(node.headers, null, 2));
+                    } else {
+                        // Try to parse and format if it's a string
+                        var headersObj = JSON.parse(node.headers);
+                        $("#node-input-headers").val(JSON.stringify(headersObj, null, 2));
+                    }
+                } catch(e) {
+                    // If it's not valid JSON, leave as is
+                }
+            }
         }
     });
 </script>
@@ -37,6 +105,83 @@
         <input type="checkbox" id="node-input-allowSelfSigned" style="display: inline-block; width: auto; vertical-align: top;">
         <span style="margin-left: 5px;">Enable this for connections with self-signed or expired certificates</span>
     </div>
+    
+    <div class="form-row">
+        <label for="node-input-autoReconnect"><i class="fa fa-refresh"></i> Auto Reconnect</label>
+        <input type="checkbox" id="node-input-autoReconnect" style="display: inline-block; width: auto; vertical-align: top;">
+        <span style="margin-left: 5px;">Automatically attempt to reconnect when disconnected</span>
+    </div>
+    
+    <div id="reconnect-settings">
+        <div class="form-row">
+            <label for="node-input-reconnectAttempts"><i class="fa fa-repeat"></i> Max Reconnect Attempts</label>
+            <input type="number" id="node-input-reconnectAttempts" min="0" style="width: 100px;">
+            <span style="margin-left: 5px;">0 = unlimited attempts</span>
+        </div>
+        
+        <div class="form-row">
+            <label for="node-input-reconnectInterval"><i class="fa fa-clock-o"></i> Reconnect Interval (ms)</label>
+            <input type="number" id="node-input-reconnectInterval" min="100" style="width: 100px;">
+        </div>
+        
+        <div class="form-row">
+            <label for="node-input-useExponentialBackoff"><i class="fa fa-line-chart"></i> Use Exponential Backoff</label>
+            <input type="checkbox" id="node-input-useExponentialBackoff" style="display: inline-block; width: auto; vertical-align: top;">
+            <span style="margin-left: 5px;">Increase delay between reconnection attempts</span>
+        </div>
+    </div>
+    
+    <div class="form-row">
+        <label for="node-input-authType"><i class="fa fa-key"></i> Authentication</label>
+        <select id="node-input-authType" style="width: 70%;">
+            <option value="none">None</option>
+            <option value="basic">Basic Authentication</option>
+            <option value="token">Token Authentication</option>
+        </select>
+    </div>
+    
+    <div id="basic-auth-settings">
+        <div class="form-row">
+            <label for="node-input-username"><i class="fa fa-user"></i> Username</label>
+            <input type="text" id="node-input-username">
+        </div>
+        
+        <div class="form-row">
+            <label for="node-input-password"><i class="fa fa-lock"></i> Password</label>
+            <input type="password" id="node-input-password">
+        </div>
+    </div>
+    
+    <div id="token-auth-settings">
+        <div class="form-row">
+            <label for="node-input-token"><i class="fa fa-id-badge"></i> Token</label>
+            <input type="password" id="node-input-token">
+        </div>
+        
+        <div class="form-row">
+            <label for="node-input-tokenLocation"><i class="fa fa-map-marker"></i> Token Location</label>
+            <select id="node-input-tokenLocation" style="width: 70%;">
+                <option value="header">Header</option>
+                <option value="url">URL Parameter</option>
+            </select>
+        </div>
+        
+        <div id="token-key-settings" class="form-row">
+            <label for="node-input-tokenKey"><i class="fa fa-tag"></i> Token Key</label>
+            <input type="text" id="node-input-tokenKey" placeholder="Authorization">
+            <div style="max-width: 460px; margin-top: 5px; margin-left: 105px; color: #999;">
+                <small>For headers, use 'Authorization' for Bearer tokens. For URL, specify the parameter name.</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="form-row">
+        <label for="node-input-headers"><i class="fa fa-list"></i> Custom Headers</label>
+        <textarea id="node-input-headers" rows="4" style="width: 70%; font-family: monospace;" placeholder='{"X-Custom-Header": "value"}'></textarea>
+        <div style="max-width: 460px; margin-top: 5px; margin-left: 105px; color: #999;">
+            <small>Enter custom headers as JSON object. Example: {"X-Custom-Header": "value"}</small>
+        </div>
+    </div>
 </script>
 
 <script type="text/html" data-help-name="dynamic-websocket">
@@ -51,6 +196,30 @@
         <dd>The message to be sent through the WebSocket. This will be stringified before sending.</dd>
         <dt>allowSelfSigned <span class="property-type">boolean</span></dt>
         <dd>If set, overrides the node's configuration for accepting self-signed certificates for this connection.</dd>
+        <dt>reconnect <span class="property-type">boolean</span></dt>
+        <dd>If set to true, forces an immediate reconnection attempt using the current URL.</dd>
+        <dt>autoReconnect <span class="property-type">boolean</span></dt>
+        <dd>If set, overrides the node's configuration for automatic reconnection.</dd>
+        <dt>reconnectAttempts <span class="property-type">number</span></dt>
+        <dd>If set, overrides the node's configuration for maximum reconnection attempts (0 = unlimited).</dd>
+        <dt>reconnectInterval <span class="property-type">number</span></dt>
+        <dd>If set, overrides the node's configuration for reconnection interval in milliseconds.</dd>
+        <dt>useExponentialBackoff <span class="property-type">boolean</span></dt>
+        <dd>If set, overrides the node's configuration for using exponential backoff for reconnection attempts.</dd>
+        <dt>authType <span class="property-type">string</span></dt>
+        <dd>Authentication type: 'none', 'basic', or 'token'. Overrides the node's configuration.</dd>
+        <dt>username <span class="property-type">string</span></dt>
+        <dd>Username for basic authentication. Overrides the node's configuration.</dd>
+        <dt>password <span class="property-type">string</span></dt>
+        <dd>Password for basic authentication. Overrides the node's configuration.</dd>
+        <dt>token <span class="property-type">string</span></dt>
+        <dd>Token for token-based authentication. Overrides the node's configuration.</dd>
+        <dt>tokenLocation <span class="property-type">string</span></dt>
+        <dd>Location for token: 'header' or 'url'. Overrides the node's configuration.</dd>
+        <dt>tokenKey <span class="property-type">string</span></dt>
+        <dd>Key name for the token (header name or URL parameter). Overrides the node's configuration.</dd>
+        <dt>headers <span class="property-type">object | string</span></dt>
+        <dd>Custom headers to include in the WebSocket connection. Can be an object or a JSON string. Overrides the node's configuration.</dd>
     </dl>
     <h3>Outputs</h3>
     <dl class="message-properties">

@@ -4,14 +4,80 @@ module.exports = function(RED) {
         var node = this;
         var WebSocket = require('ws');
         var ws = null;
+        var reconnectTimeout = null;
+        var reconnectAttempts = 0;
 
         // Load the stored URL from persistent storage
         node.url = node.context().get('storedUrl') || config.url || "";
         node.allowSelfSigned = config.allowSelfSigned || false;
+        
+        // Reconnection settings
+        node.autoReconnect = config.autoReconnect || false;
+        node.reconnectAttempts = config.reconnectAttempts || 0; // 0 = unlimited
+        node.reconnectInterval = config.reconnectInterval || 5000; // Default: 5 seconds
+        node.useExponentialBackoff = config.useExponentialBackoff || false;
+        
+        // Authentication settings
+        node.authType = config.authType || 'none';
+        node.username = config.username || '';
+        node.password = config.password || '';
+        node.token = config.token || '';
+        node.tokenLocation = config.tokenLocation || 'header';
+        node.tokenKey = config.tokenKey || 'Authorization';
+        
+        // Custom headers - parse from JSON if provided
+        try {
+            node.headers = config.headers ? JSON.parse(config.headers) : {};
+        } catch (e) {
+            node.warn("Invalid headers JSON: " + e.message);
+            node.headers = {};
+        }
+
+        function calculateReconnectDelay() {
+            // Calculate delay with exponential backoff if enabled
+            if (node.useExponentialBackoff) {
+                // Cap the exponent to avoid extremely long delays
+                const exponent = Math.min(reconnectAttempts, 10);
+                // Base delay * 2^attempt with some randomization to avoid thundering herd
+                return Math.floor(node.reconnectInterval * Math.pow(1.5, exponent) * (0.8 + Math.random() * 0.4));
+            } else {
+                return node.reconnectInterval;
+            }
+        }
+
+        function scheduleReconnect() {
+            // Clear any existing reconnect timeout
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+                reconnectTimeout = null;
+            }
+
+            // Check if we've exceeded the maximum number of attempts
+            if (node.reconnectAttempts > 0 && reconnectAttempts >= node.reconnectAttempts) {
+                node.status({fill:"red", shape:"dot", text:"reconnect failed after " + reconnectAttempts + " attempts"});
+                node.send([null, {state: "reconnect_failed", attempts: reconnectAttempts}, null]);
+                reconnectAttempts = 0;
+                return;
+            }
+
+            // Calculate delay with exponential backoff if enabled
+            const delay = calculateReconnectDelay();
+            
+            node.status({fill:"yellow", shape:"ring", text:"reconnecting in " + Math.floor(delay/1000) + "s (attempt " + (reconnectAttempts + 1) + ")"});
+            
+            reconnectTimeout = setTimeout(function() {
+                reconnectAttempts++;
+                node.status({fill:"yellow", shape:"ring", text:"reconnecting... attempt " + reconnectAttempts});
+                node.send([null, {state: "reconnecting", attempt: reconnectAttempts}, null]);
+                connectWebSocket(node.url);
+            }, delay);
+        }
 
         function connectWebSocket(url) {
-            if (ws) {
-                ws.close();
+            // Clear any existing reconnect timeout
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+                reconnectTimeout = null;
             }
 
             if (!url) {
@@ -23,11 +89,47 @@ module.exports = function(RED) {
             // Store the URL in persistent storage
             node.context().set('storedUrl', url);
 
-            // Create WebSocket with options for self-signed certificates if enabled
+            // Create WebSocket with options for self-signed certificates and authentication
             const wsOptions = {};
+            const headers = {};
+            
+            // Handle self-signed certificates
             if (node.allowSelfSigned) {
                 wsOptions.rejectUnauthorized = false;
             }
+            
+            // Handle authentication
+            if (node.authType === 'basic') {
+                // Basic authentication
+                const auth = 'Basic ' + Buffer.from(node.username + ':' + node.password).toString('base64');
+                headers['Authorization'] = auth;
+            } else if (node.authType === 'token') {
+                // Token-based authentication
+                if (node.tokenLocation === 'header') {
+                    // Add token to headers
+                    const tokenValue = node.tokenKey.toLowerCase() === 'authorization' && !node.token.startsWith('Bearer ') 
+                        ? 'Bearer ' + node.token 
+                        : node.token;
+                    headers[node.tokenKey] = tokenValue;
+                } else if (node.tokenLocation === 'url' && url.indexOf('?') === -1) {
+                    // Add token to URL as query parameter
+                    url = url + '?' + encodeURIComponent(node.tokenKey) + '=' + encodeURIComponent(node.token);
+                } else if (node.tokenLocation === 'url') {
+                    // Add token to existing URL query parameters
+                    url = url + '&' + encodeURIComponent(node.tokenKey) + '=' + encodeURIComponent(node.token);
+                }
+            }
+            
+            // Add custom headers
+            if (node.headers && typeof node.headers === 'object') {
+                Object.assign(headers, node.headers);
+            }
+            
+            // Set headers in options
+            if (Object.keys(headers).length > 0) {
+                wsOptions.headers = headers;
+            }
+            
             ws = new WebSocket(url, wsOptions);
 
             ws.on('open', function() {
@@ -39,7 +141,15 @@ module.exports = function(RED) {
                 node.status({fill:"red", shape:"ring", text:"disconnected"});
                 // Only send state message if it wasn't closed by msg.close
                 if (code !== 1000) {
-                    node.send([null, {state: "disconnected"}, null]);
+                    node.send([null, {state: "disconnected", code: code}, null]);
+                    
+                    // Auto reconnect if enabled and it wasn't a normal closure
+                    if (node.autoReconnect && code !== 1000 && node.url) {
+                        scheduleReconnect();
+                    }
+                } else {
+                    // Reset reconnect attempts on normal closure
+                    reconnectAttempts = 0;
                 }
             });
 
@@ -47,6 +157,9 @@ module.exports = function(RED) {
                 node.status({fill:"red", shape:"dot", text:"error"});
                 node.error("WebSocket error: " + error);
                 node.send([null, {state: "error", error: error.toString()}, null]);
+                
+                // The 'close' event will be triggered after the error event
+                // Auto-reconnect will be handled there
             });
 
             ws.on('message', function(data) {
@@ -71,13 +184,74 @@ module.exports = function(RED) {
                 if (msg.allowSelfSigned !== undefined) {
                     node.allowSelfSigned = msg.allowSelfSigned;
                 }
+                
+                // Allow dynamic override of reconnection settings
+                if (msg.autoReconnect !== undefined) {
+                    node.autoReconnect = msg.autoReconnect;
+                }
+                if (msg.reconnectAttempts !== undefined) {
+                    node.reconnectAttempts = msg.reconnectAttempts;
+                }
+                if (msg.reconnectInterval !== undefined) {
+                    node.reconnectInterval = msg.reconnectInterval;
+                }
+                if (msg.useExponentialBackoff !== undefined) {
+                    node.useExponentialBackoff = msg.useExponentialBackoff;
+                }
+                
+                // Allow dynamic override of authentication settings
+                if (msg.authType !== undefined) {
+                    node.authType = msg.authType;
+                }
+                if (msg.username !== undefined) {
+                    node.username = msg.username;
+                }
+                if (msg.password !== undefined) {
+                    node.password = msg.password;
+                }
+                if (msg.token !== undefined) {
+                    node.token = msg.token;
+                }
+                if (msg.tokenLocation !== undefined) {
+                    node.tokenLocation = msg.tokenLocation;
+                }
+                if (msg.tokenKey !== undefined) {
+                    node.tokenKey = msg.tokenKey;
+                }
+                if (msg.headers !== undefined) {
+                    if (typeof msg.headers === 'object') {
+                        node.headers = msg.headers;
+                    } else if (typeof msg.headers === 'string') {
+                        try {
+                            node.headers = JSON.parse(msg.headers);
+                        } catch (e) {
+                            node.warn("Invalid headers JSON in message: " + e.message);
+                        }
+                    }
+                }
+                
+                // Reset reconnect attempts when connecting to a new URL
+                reconnectAttempts = 0;
                 connectWebSocket(msg.url);
+            } else if (msg.reconnect === true) {
+                // Force a reconnection if we have a URL
+                if (node.url) {
+                    reconnectAttempts = 0;
+                    connectWebSocket(node.url);
+                }
             } else if (msg.close === true) {
+                // Clear any reconnection timeout
+                if (reconnectTimeout) {
+                    clearTimeout(reconnectTimeout);
+                    reconnectTimeout = null;
+                }
+                
                 if (ws) {
                     ws.close(1000);  // Use 1000 to indicate normal closure
                 }
                 node.url = "";
                 node.context().set('storedUrl', "");
+                reconnectAttempts = 0;
                 node.status({fill:"yellow", shape:"ring", text:"closed"});
             } else if (msg.message) {
                 if (ws && ws.readyState === WebSocket.OPEN) {
@@ -90,6 +264,12 @@ module.exports = function(RED) {
         });
 
         node.on('close', function(done) {
+            // Clear any reconnection timeout
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+                reconnectTimeout = null;
+            }
+            
             if (ws) {
                 ws.close();
             }
@@ -101,7 +281,18 @@ module.exports = function(RED) {
         defaults: {
             name: {value: ""},
             url: {value: ""},
-            allowSelfSigned: {value: false}
+            allowSelfSigned: {value: false},
+            autoReconnect: {value: false},
+            reconnectAttempts: {value: 0},
+            reconnectInterval: {value: 5000},
+            useExponentialBackoff: {value: false},
+            authType: {value: "none"},
+            username: {value: ""},
+            password: {value: "", type: "password"},
+            token: {value: "", type: "password"},
+            tokenLocation: {value: "header"},
+            tokenKey: {value: "Authorization"},
+            headers: {value: ""}
         }
     });
 }
