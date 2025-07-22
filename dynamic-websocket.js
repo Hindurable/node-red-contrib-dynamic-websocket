@@ -99,6 +99,7 @@ module.exports = function(RED) {
                 return;
             }
 
+            node.log("Attempting to connect to WebSocket URL: " + url);
             node.url = url;
             // Store the URL in persistent storage
             node.context().set('storedUrl', url);
@@ -144,9 +145,11 @@ module.exports = function(RED) {
                 wsOptions.headers = headers;
             }
             
+            node.log("Creating WebSocket with options: " + JSON.stringify(wsOptions));
             ws = new WebSocket(url, wsOptions);
 
             ws.on('open', function() {
+                node.log("WebSocket connection opened successfully to: " + url);
                 node.status({fill:"green", shape:"dot", text:url});
                 node.send([null, null, {state: "Connected"}]);
             });
