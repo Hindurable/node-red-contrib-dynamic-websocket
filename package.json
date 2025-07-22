@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-dynamic-websocket",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "A node that dynamically connects to a WebSocket URL, can send and receive messages, and reports connection state changes.",
   "keywords": ["node-red", "websocket", "dynamic", "web-socket", "dynamic-websocket"],
   "node-red": {

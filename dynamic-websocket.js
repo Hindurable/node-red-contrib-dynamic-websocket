@@ -206,6 +206,7 @@ module.exports = function(RED) {
 
         node.on('input', function(msg, send, done) {
             if (msg.url) {
+                node.log("Received msg.url: " + msg.url);
                 // Allow dynamic override of self-signed certificate option
                 if (msg.allowSelfSigned !== undefined) {
                     node.allowSelfSigned = msg.allowSelfSigned;
@@ -280,6 +281,10 @@ module.exports = function(RED) {
                         }
                     }
                 }
+                
+                // Update the node URL and store it persistently before connecting
+                node.url = msg.url;
+                node.context().set('storedUrl', msg.url);
                 
                 // Reset reconnect attempts when connecting to a new URL
                 reconnectAttempts = 0;
