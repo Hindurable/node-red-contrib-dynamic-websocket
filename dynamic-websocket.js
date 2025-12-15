@@ -99,13 +99,17 @@ module.exports = function(RED) {
                 return;
             }
 
-            node.log("Attempting to connect to WebSocket URL: " + url);
+            node.debug("Attempting to connect to WebSocket URL: " + url);
             node.url = url;
             // Store the URL in persistent storage
             node.context().set('storedUrl', url);
 
             // Create WebSocket with options for self-signed certificates and authentication
-            const wsOptions = {};
+            const wsOptions = {
+                // Disable per-message deflate to prevent CONTINUATION frame errors
+                // with servers that don't properly support WebSocket compression
+                perMessageDeflate: false
+            };
             const headers = {};
             
             // Handle self-signed certificates
@@ -145,11 +149,11 @@ module.exports = function(RED) {
                 wsOptions.headers = headers;
             }
             
-            node.log("Creating WebSocket with options: " + JSON.stringify(wsOptions));
+            node.debug("Creating WebSocket with options: " + JSON.stringify(wsOptions));
             ws = new WebSocket(url, wsOptions);
 
             ws.on('open', function() {
-                node.log("WebSocket connection opened successfully to: " + url);
+                node.debug("WebSocket connection opened successfully to: " + url);
                 node.status({fill:"green", shape:"dot", text:url});
                 node.send([null, null, {state: "Connected"}]);
             });
@@ -209,7 +213,7 @@ module.exports = function(RED) {
 
         node.on('input', function(msg, send, done) {
             if (msg.url) {
-                node.log("Received msg.url: " + msg.url);
+                node.debug("Received msg.url: " + msg.url);
                 // Allow dynamic override of self-signed certificate option
                 if (msg.allowSelfSigned !== undefined) {
                     node.allowSelfSigned = msg.allowSelfSigned;
@@ -329,8 +333,12 @@ module.exports = function(RED) {
                         // Handle binary data if enabled
                         if (node.binarySupport && msg.binary === true && Buffer.isBuffer(msg.message)) {
                             ws.send(msg.message);
-                        } else {
+                        } else if (typeof msg.message === 'object' && msg.message !== null) {
+                            // Only stringify objects, not primitives
                             ws.send(JSON.stringify(msg.message));
+                        } else {
+                            // Send strings, numbers, booleans as-is
+                            ws.send(String(msg.message));
                         }
                     }
                 } else {
