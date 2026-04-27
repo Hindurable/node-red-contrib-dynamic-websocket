@@ -206,6 +206,63 @@ module.exports = function(RED) {
             });
         }
 
+        // Function to transform messages based on selected format and template
+        function transformMessage(message) {
+            try {
+                // Skip transformation for null or undefined messages
+                if (message === null || message === undefined) {
+                    return null;
+                }
+                
+                // Apply template if available
+                if (Object.keys(node.messageTemplate).length > 0) {
+                    let result = JSON.parse(JSON.stringify(node.messageTemplate)); // Clone template
+                    
+                    // Simple placeholder replacement for string values
+                    function replaceValues(obj, data) {
+                        for (let key in obj) {
+                            if (typeof obj[key] === 'string' && obj[key].startsWith('$')) {
+                                const placeholder = obj[key].substring(1); // Remove $ prefix
+                                if (data[placeholder] !== undefined) {
+                                    obj[key] = data[placeholder];
+                                }
+                            } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+                                replaceValues(obj[key], data);
+                            }
+                        }
+                        return obj;
+                    }
+                    
+                    result = replaceValues(result, message);
+                    
+                    // Validate message if validation is enabled
+                    if (node.validateMessages) {
+                        // Implement validation logic based on message format
+                        // For now, just check if required fields are present
+                        let valid = true;
+                        for (let key in result) {
+                            if (result[key] === undefined || result[key] === null) {
+                                valid = false;
+                                node.warn("Message validation failed: Missing required field '" + key + "'");
+                                break;
+                            }
+                        }
+                        if (!valid) {
+                            return null;
+                        }
+                    }
+                    
+                    return result;
+                } else {
+                    // No template, just return the original message
+                    return message;
+                }
+            } catch (e) {
+                node.warn("Message transformation failed: " + e.message);
+                return null;
+            }
+        }
+
         // Connect on startup if URL is set
         if (node.url) {
             connectWebSocket(node.url);
@@ -360,63 +417,6 @@ module.exports = function(RED) {
             }
             done();
         });
-    }
-
-    // Function to transform messages based on selected format and template
-    function transformMessage(message) {
-        try {
-            // Skip transformation for null or undefined messages
-            if (message === null || message === undefined) {
-                return null;
-            }
-            
-            // Apply template if available
-            if (Object.keys(node.messageTemplate).length > 0) {
-                let result = JSON.parse(JSON.stringify(node.messageTemplate)); // Clone template
-                
-                // Simple placeholder replacement for string values
-                function replaceValues(obj, data) {
-                    for (let key in obj) {
-                        if (typeof obj[key] === 'string' && obj[key].startsWith('$')) {
-                            const placeholder = obj[key].substring(1); // Remove $ prefix
-                            if (data[placeholder] !== undefined) {
-                                obj[key] = data[placeholder];
-                            }
-                        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-                            replaceValues(obj[key], data);
-                        }
-                    }
-                    return obj;
-                }
-                
-                result = replaceValues(result, message);
-                
-                // Validate message if validation is enabled
-                if (node.validateMessages) {
-                    // Implement validation logic based on message format
-                    // For now, just check if required fields are present
-                    let valid = true;
-                    for (let key in result) {
-                        if (result[key] === undefined || result[key] === null) {
-                            valid = false;
-                            node.warn("Message validation failed: Missing required field '" + key + "'");
-                            break;
-                        }
-                    }
-                    if (!valid) {
-                        return null;
-                    }
-                }
-                
-                return result;
-            } else {
-                // No template, just return the original message
-                return message;
-            }
-        } catch (e) {
-            node.warn("Message transformation failed: " + e.message);
-            return null;
-        }
     }
     
     RED.nodes.registerType("dynamic-websocket", DynamicWebSocketNode, {
